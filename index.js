@@ -14,6 +14,7 @@ class BluetoothDataMonitor {
     
     initializeElements() {
         this.connectBtn = document.getElementById('connectBtn');
+        this.connectLocalBtn = document.getElementById('connectLocalBtn');
         this.connectionStatus = document.getElementById('connectionStatus');
         this.desiredPosition = document.getElementById('desiredPosition');
         this.currentPosition = document.getElementById('currentPosition');
@@ -24,6 +25,21 @@ class BluetoothDataMonitor {
         this.dOutput = document.getElementById('dOutput');
         this.dataLog = document.getElementById('dataLog');
         this.clearLogBtn = document.getElementById('clearLog');
+        
+        // Setpoint control elements
+        this.setpointSlider = document.getElementById('setpointSlider');
+        this.setpointInput = document.getElementById('setpointInput');
+        this.currentSetpoint = document.getElementById('currentSetpoint');
+        this.sendSetpointBtn = document.getElementById('sendSetpoint');
+        this.autoModeBtn = document.getElementById('autoMode');
+        this.emergencyStopBtn = document.getElementById('emergencyStop');
+        this.presetBtns = document.querySelectorAll('.preset-btn');
+        this.controlPanel = document.querySelector('.control-panel');
+        
+        // Control state
+        this.autoMode = true;
+        this.emergencyStop = false;
+        this.currentSetpointValue = 15.0;
     }
     
     initializeChart() {
@@ -84,7 +100,28 @@ class BluetoothDataMonitor {
     
     bindEvents() {
         this.connectBtn.addEventListener('click', () => this.toggleConnection());
+        this.connectLocalBtn.addEventListener('click', () => this.toggleLocalConnection());
         this.clearLogBtn.addEventListener('click', () => this.clearLog());
+        
+        // Setpoint control events
+        this.setpointSlider.addEventListener('input', (e) => this.updateSetpoint(parseFloat(e.target.value)));
+        this.setpointInput.addEventListener('input', (e) => this.updateSetpoint(parseFloat(e.target.value)));
+        this.sendSetpointBtn.addEventListener('click', () => this.sendSetpointCommand());
+        this.autoModeBtn.addEventListener('click', () => this.toggleAutoMode());
+        this.emergencyStopBtn.addEventListener('click', () => this.triggerEmergencyStop());
+        
+        // Preset button events
+        this.presetBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const value = parseFloat(e.target.dataset.value);
+                this.updateSetpoint(value);
+                this.sendSetpointCommand();
+                this.highlightPreset(value);
+            });
+        });
+        
+        // Initialize control panel state
+        this.updateControlPanelState();
     }
     
     async toggleConnection() {
@@ -266,6 +303,289 @@ class BluetoothDataMonitor {
     clearLog() {
         this.dataLog.innerHTML = '';
         this.addLogEntry('Log cleared');
+    }
+    
+    async toggleLocalConnection() {
+        if (this.isConnected) {
+            await this.disconnectLocal();
+        } else {
+            await this.connectToLocalComputer();
+        }
+    }
+    
+    async disconnectLocal() {
+        if (this.pollingInterval) {
+            clearInterval(this.pollingInterval);
+        }
+        if (this.mockInterval) {
+            clearInterval(this.mockInterval);
+        }
+        
+        this.isConnected = false;
+        this.updateConnectionStatus('disconnected', 'Disconnected');
+        this.connectLocalBtn.textContent = '🖥️ Connect to Local Computer';
+        this.connectLocalBtn.disabled = false;
+        this.updateControlPanelState();
+        this.addLogEntry('Disconnected from local computer');
+    }
+    
+    // Computer-to-Computer Connection via HTTP API
+    async connectToLocalComputer() {
+        try {
+            this.updateConnectionStatus('connecting', 'Connecting to Local Computer...');
+            this.connectLocalBtn.disabled = true;
+            
+            // Connect to the Python simulator via WebSocket simulation (using fetch for polling)
+            this.startPollingConnection();
+            
+        } catch (error) {
+            console.error('Local connection failed:', error);
+            this.updateConnectionStatus('disconnected', 'Local Connection Failed');
+            this.connectLocalBtn.disabled = false;
+            this.addLogEntry(`Local connection failed: ${error.message}`);
+        }
+    }
+    
+    startPollingConnection() {
+        // Simulate continuous data polling from local server
+        const pollInterval = setInterval(async () => {
+            try {
+                // Try to fetch data from local Python server (if running)
+                const response = await fetch('http://localhost:9999/data', { 
+                    method: 'GET',
+                    timeout: 1000 
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    this.handleLocalData(data);
+                    
+                    if (!this.isConnected) {
+                        this.isConnected = true;
+                        this.updateConnectionStatus('connected', 'Connected to Local Computer');
+                        this.connectLocalBtn.textContent = '🔌 Disconnect';
+                        this.connectLocalBtn.disabled = false;
+                        this.updateControlPanelState();
+                        this.addLogEntry('Connected to local computer successfully');
+                    }
+                }
+            } catch (error) {
+                // If no connection available, try mock data for demonstration
+                if (!this.isConnected) {
+                    this.startMockDataStream();
+                    clearInterval(pollInterval);
+                }
+            }
+        }, 100); // Poll every 100ms
+        
+        this.pollingInterval = pollInterval;
+        
+        // Set timeout for connection attempt
+        setTimeout(() => {
+            if (!this.isConnected) {
+                this.startMockDataStream();
+                clearInterval(pollInterval);
+            }
+        }, 2000);
+    }
+    
+    startMockDataStream() {
+        // Generate realistic mock data for demonstration
+        let time = 0;
+        
+        this.isConnected = true;
+        this.updateConnectionStatus('connected', 'Connected (Demo Mode)');
+        this.connectLocalBtn.textContent = '🔌 Disconnect';
+        this.connectLocalBtn.disabled = false;
+        this.updateControlPanelState();
+        this.addLogEntry('Connected in demo mode - showing simulated data');
+        
+        this.mockInterval = setInterval(() => {
+            time += 0.03;
+            
+            // Generate realistic PID control data
+            const desired = 15 + 8 * Math.sin(time * 0.1);
+            const noise = (Math.random() - 0.5) * 0.5;
+            const current = desired + noise + 2 * Math.sin(time * 0.05);
+            const error = desired - current;
+            
+            const mockData = {
+                timestamp: Date.now() * 1000,
+                desired_position: desired,
+                current_position: current,
+                servo_command: 0.54 + error * 0.01,
+                error: error,
+                P_output: 0.06 * error,
+                I_output: Math.sin(time * 0.02) * 0.1,
+                D_output: Math.cos(time * 0.03) * 0.05
+            };
+            
+            this.updateDataDisplay(mockData);
+            this.updateChart(mockData);
+            
+        }, 30); // 30ms updates
+    }
+    
+    handleLocalData(data) {
+        // Handle data from local Python computer
+        this.updateDataDisplay(data);
+        this.updateChart(data);
+        this.addLogEntry(`Local Data: D:${data.desired_position} C:${data.current_position} S:${data.servo_command}`);
+    }
+    
+    // Setpoint Control Methods
+    updateSetpoint(value) {
+        if (value < 2) value = 2;
+        if (value > 33) value = 33;
+        
+        this.currentSetpointValue = value;
+        this.setpointSlider.value = value;
+        this.setpointInput.value = value;
+        this.currentSetpoint.textContent = value.toFixed(1);
+        
+        this.highlightPreset(value);
+    }
+    
+    highlightPreset(value) {
+        this.presetBtns.forEach(btn => {
+            if (parseFloat(btn.dataset.value) === value) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+    
+    async sendSetpointCommand() {
+        if (!this.isConnected) {
+            alert('Please connect to a device first!');
+            return;
+        }
+        
+        if (this.emergencyStop) {
+            alert('System is in emergency stop mode. Reset first.');
+            return;
+        }
+        
+        const command = {
+            type: 'setpoint',
+            value: this.currentSetpointValue,
+            timestamp: Date.now(),
+            auto_mode: this.autoMode
+        };
+        
+        try {
+            // Send command to Python script
+            await this.sendCommand(command);
+            this.addLogEntry(`📤 Setpoint sent: ${this.currentSetpointValue.toFixed(1)} cm`);
+            
+            // Visual feedback
+            this.sendSetpointBtn.textContent = '✅ Sent!';
+            this.sendSetpointBtn.style.background = 'linear-gradient(45deg, #4CAF50, #45a049)';
+            
+            setTimeout(() => {
+                this.sendSetpointBtn.textContent = '📤 Send Setpoint';
+                this.sendSetpointBtn.style.background = '';
+            }, 1500);
+            
+        } catch (error) {
+            console.error('Failed to send setpoint:', error);
+            this.addLogEntry(`❌ Failed to send setpoint: ${error.message}`);
+            
+            this.sendSetpointBtn.textContent = '❌ Failed';
+            this.sendSetpointBtn.style.background = '#f44336';
+            
+            setTimeout(() => {
+                this.sendSetpointBtn.textContent = '📤 Send Setpoint';
+                this.sendSetpointBtn.style.background = '';
+            }, 1500);
+        }
+    }
+    
+    async sendCommand(command) {
+        if (this.mockInterval) {
+            // For demo mode, just log the command
+            console.log('Demo mode - Command would be sent:', command);
+            return;
+        }
+        
+        // Send to local Python server
+        const response = await fetch('http://localhost:9999/command', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(command)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        return await response.json();
+    }
+    
+    toggleAutoMode() {
+        this.autoMode = !this.autoMode;
+        this.updateControlPanelState();
+        
+        const command = {
+            type: 'auto_mode',
+            value: this.autoMode,
+            timestamp: Date.now()
+        };
+        
+        this.sendCommand(command).catch(console.error);
+        this.addLogEntry(`🔄 Auto mode: ${this.autoMode ? 'ON' : 'OFF'}`);
+    }
+    
+    triggerEmergencyStop() {
+        this.emergencyStop = !this.emergencyStop;
+        this.updateControlPanelState();
+        
+        const command = {
+            type: 'emergency_stop',
+            value: this.emergencyStop,
+            timestamp: Date.now()
+        };
+        
+        this.sendCommand(command).catch(console.error);
+        this.addLogEntry(`🛑 Emergency stop: ${this.emergencyStop ? 'ACTIVE' : 'RESET'}`);
+        
+        if (this.emergencyStop) {
+            this.addLogEntry('⚠️ System stopped for safety - all movement disabled');
+        } else {
+            this.addLogEntry('✅ Emergency stop reset - system operational');
+        }
+    }
+    
+    updateControlPanelState() {
+        // Update auto mode button
+        if (this.autoMode) {
+            this.autoModeBtn.textContent = '🔄 Auto Mode ON';
+            this.autoModeBtn.classList.add('auto-active');
+        } else {
+            this.autoModeBtn.textContent = '⏸️ Manual Mode';
+            this.autoModeBtn.classList.remove('auto-active');
+        }
+        
+        // Update emergency stop button
+        if (this.emergencyStop) {
+            this.emergencyStopBtn.textContent = '🔄 Reset System';
+            this.emergencyStopBtn.style.background = 'linear-gradient(45deg, #ff9800, #f57c00)';
+            this.controlPanel.classList.add('disabled');
+        } else {
+            this.emergencyStopBtn.textContent = '🛑 Emergency Stop';
+            this.emergencyStopBtn.style.background = '';
+            this.controlPanel.classList.remove('disabled');
+        }
+        
+        // Enable/disable controls based on connection
+        const isDisabled = !this.isConnected || this.emergencyStop;
+        this.sendSetpointBtn.disabled = isDisabled;
+        this.setpointSlider.disabled = isDisabled;
+        this.setpointInput.disabled = isDisabled;
+        this.presetBtns.forEach(btn => btn.disabled = isDisabled);
     }
 }
 
