@@ -1,0 +1,83 @@
+from machine import ADC
+from picozero import Servo, DistanceSensor
+from time import sleep, ticks_us, ticks_diff
+
+
+blue_servo = Servo(16, min_pulse_width=0.00055, max_pulse_width=0.0026)
+ds = DistanceSensor(echo=2, trigger=3)
+pot_pin = ADC(26)
+
+
+lastError = 0
+errorSum = 0
+
+Kp = 0.06
+Ki = 0.0558139535
+Kd = 0.016125
+
+servo_base_position = 0.54
+
+lastTime = ticks_us() #integral and derivative
+
+buf = []
+while len(buf) < 3:
+    if ds.distance is not None:
+        current_cart_position = round(ds.distance *100, 1)#[cm]
+        buf.append(current_cart_position)
+        if len(buf) > 3:
+            buf.pop(0)
+    sleep(0.03)
+    
+blue_servo.value = servo_base_position
+sleep(1)
+
+
+while True:
+    now = ticks_us()
+    timeChange = ticks_diff(now, lastTime) / 1000000 #[sec]
+    
+    #desired position
+    pot_value = pot_pin.read_u16()
+    desired_cart_position = int(33.2*(pot_value/65555)) #[cm]
+    if desired_cart_position < 2:
+        desired_cart_position = 2
+        
+        
+    
+    #Actual cart position
+    if ds.distance is not None:
+        current_cart_position = round(ds.distance *100, 1)#[cm]
+        buf.append(current_cart_position)
+        if len(buf) > 3:
+            buf.pop(0)
+    current_cart_position_avg = sum(buf) / len(buf)
+        
+        
+    error = desired_cart_position - current_cart_position_avg #[cm]
+    
+    
+    P_output = Kp * error
+    errorSum = errorSum +(error*timeChange)
+    I_output = Ki * errorSum
+    D_output = Kd * (error - lastError) / timeChange
+    
+    
+    servo_correction = P_output + I_output + D_output
+    servo_command = round(servo_base_position - servo_correction, 2)
+    
+    
+    if servo_command > 0.90:
+        servo_command = 0.90
+    if servo_command < 0.18:
+        servo_command = 0.18
+        
+    blue_servo.value = servo_command
+    
+    lastError = error
+    lastTime = ticks_us()#[miscrosec]
+    
+    print(desired_cart_position, current_cart_position_avg, servo_command)
+    
+    sleep(0.03)
+
+
