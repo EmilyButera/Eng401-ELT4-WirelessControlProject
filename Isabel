@@ -2,14 +2,47 @@ from machine import ADC, UART
 from picozero import Servo, DistanceSensor
 from time import sleep, ticks_us, ticks_diff
 import json
+import sys
 
 
 blue_servo = Servo(16, min_pulse_width=0.00055, max_pulse_width=0.0026)
 ds = DistanceSensor(echo=2, trigger=3)
 pot_pin = ADC(26)
 
-# Initialize Bluetooth/UART communication
-bluetooth = UART(0, baudrate=9600, tx=0, rx=1)
+# Initialize USB Serial communication to computer
+# Using USB serial (automatically available when connected via USB)
+usb_serial = sys.stdout
+
+# Control state - can be modified by computer commands
+manual_setpoint_override = None
+auto_mode = True
+emergency_stop = False
+
+def check_for_commands():
+    """Check for incoming commands from computer via USB serial"""
+    global manual_setpoint_override, auto_mode, emergency_stop
+    
+    if sys.stdin.in_waiting > 0:
+        try:
+            command_line = sys.stdin.readline().strip()
+            if command_line:
+                command = json.loads(command_line)
+                cmd_type = command.get('type')
+                
+                if cmd_type == 'setpoint':
+                    manual_setpoint_override = float(command.get('value', 15))
+                    print(f"CMD_ACK:setpoint:{manual_setpoint_override}")
+                    
+                elif cmd_type == 'auto_mode':
+                    auto_mode = bool(command.get('value', True))
+                    print(f"CMD_ACK:auto_mode:{auto_mode}")
+                    
+                elif cmd_type == 'emergency_stop':
+                    emergency_stop = bool(command.get('value', False))
+                    print(f"CMD_ACK:emergency_stop:{emergency_stop}")
+                    
+        except:
+            pass  # Ignore malformed commands
 
 
 lastError = 0
@@ -37,14 +70,27 @@ sleep(1)
 
 
 while True:
+    # Check for commands from computer
+    check_for_commands()
+    
+    # Skip processing if emergency stop is active
+    if emergency_stop:
+        blue_servo.value = servo_base_position
+        sleep(0.1)
+        continue
+    
     now = ticks_us()
     timeChange = ticks_diff(now, lastTime) / 1000000 #[sec]
     
-    #desired position
-    pot_value = pot_pin.read_u16()
-    desired_cart_position = int(33.2*(pot_value/65555)) #[cm]
-    if desired_cart_position < 2:
-        desired_cart_position = 2
+    #desired position - check for manual override from computer
+    if manual_setpoint_override is not None and not auto_mode:
+        desired_cart_position = manual_setpoint_override
+    else:
+        # Use potentiometer for local control or auto mode
+        pot_value = pot_pin.read_u16()
+        desired_cart_position = int(33.2*(pot_value/65555)) #[cm]
+        if desired_cart_position < 2:
+            desired_cart_position = 2
         
         
     
@@ -80,10 +126,7 @@ while True:
     lastError = error
     lastTime = ticks_us()#[miscrosec]
     
-    # Print to console for debugging
-    print(desired_cart_position, current_cart_position_avg, servo_command)
-    
-    # Send data via Bluetooth as JSON
+    # Send data to computer via USB serial as JSON
     data = {
         "timestamp": ticks_us(),
         "desired_position": desired_cart_position,
@@ -92,14 +135,17 @@ while True:
         "error": error,
         "P_output": P_output,
         "I_output": I_output,
-        "D_output": D_output
+        "D_output": D_output,
+        "auto_mode": auto_mode,
+        "emergency_stop": emergency_stop
     }
     
+    # Send JSON data to computer via USB serial
     try:
-        json_data = json.dumps(data) + "\n"
-        bluetooth.write(json_data.encode())
+        json_data = "DATA:" + json.dumps(data)
+        print(json_data)  # This goes to USB serial connection
     except Exception as e:
-        print("Bluetooth error:", e)
+        print("Serial error:", e)
     
     sleep(0.03)
 

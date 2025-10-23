@@ -347,46 +347,72 @@ class BluetoothDataMonitor {
     }
     
     startPollingConnection() {
-        // Simulate continuous data polling from local server
+        // Connect to real hardware data from Computer A
         const pollInterval = setInterval(async () => {
             try {
-                // Try to fetch data from local Python server (if running)
-                const response = await fetch('http://localhost:9999/data', { 
+                // Check connection status first
+                const statusResponse = await fetch('http://localhost:9999/status', { 
                     method: 'GET',
                     timeout: 1000 
                 });
                 
-                if (response.ok) {
-                    const data = await response.json();
-                    this.handleLocalData(data);
+                if (statusResponse.ok) {
+                    const status = await statusResponse.json();
                     
-                    if (!this.isConnected) {
-                        this.isConnected = true;
-                        this.updateConnectionStatus('connected', 'Connected to Local Computer');
-                        this.connectLocalBtn.textContent = '🔌 Disconnect';
-                        this.connectLocalBtn.disabled = false;
-                        this.updateControlPanelState();
-                        this.addLogEntry('Connected to local computer successfully');
+                    if (status.pico_connected) {
+                        // Get real data from Pico
+                        const dataResponse = await fetch('http://localhost:9999/data', { 
+                            method: 'GET',
+                            timeout: 1000 
+                        });
+                        
+                        if (dataResponse.ok) {
+                            const data = await dataResponse.json();
+                            this.handleLocalData(data);
+                            
+                            if (!this.isConnected) {
+                                this.isConnected = true;
+                                this.updateConnectionStatus('connected', 'Connected to Pico Hardware');
+                                this.connectLocalBtn.textContent = '🔌 Disconnect';
+                                this.connectLocalBtn.disabled = false;
+                                this.updateControlPanelState();
+                                this.addLogEntry('Connected to Pico hardware successfully');
+                            }
+                        }
+                    } else {
+                        // Pico not connected
+                        if (this.isConnected) {
+                            this.addLogEntry('⚠️ Pico disconnected from Computer A');
+                            this.updateConnectionStatus('connecting', 'Pico Disconnected');
+                        }
                     }
+                } else {
+                    throw new Error('Computer A not responding');
                 }
+                
             } catch (error) {
-                // If no connection available, try mock data for demonstration
+                // Connection failed - offer demo mode
                 if (!this.isConnected) {
+                    console.log('Hardware bridge not available, starting demo mode');
                     this.startMockDataStream();
                     clearInterval(pollInterval);
+                } else if (this.isConnected) {
+                    this.addLogEntry(`❌ Connection lost: ${error.message}`);
+                    this.updateConnectionStatus('connecting', 'Reconnecting...');
                 }
             }
-        }, 100); // Poll every 100ms
+        }, 100); // Poll every 100ms for real-time data
         
         this.pollingInterval = pollInterval;
         
-        // Set timeout for connection attempt
+        // Set timeout for initial connection attempt
         setTimeout(() => {
             if (!this.isConnected) {
+                console.log('No hardware detected, switching to demo mode');
                 this.startMockDataStream();
                 clearInterval(pollInterval);
             }
-        }, 2000);
+        }, 3000); // Give more time for hardware connection
     }
     
     startMockDataStream() {
@@ -509,7 +535,7 @@ class BluetoothDataMonitor {
             return;
         }
         
-        // Send to local Python server
+        // Send command to Computer A which forwards it to the Pico
         const response = await fetch('http://localhost:9999/command', {
             method: 'POST',
             headers: {
@@ -522,7 +548,12 @@ class BluetoothDataMonitor {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        return await response.json();
+        const result = await response.json();
+        
+        // Log successful command transmission
+        this.addLogEntry(`📡 Command sent to Pico via Computer A`);
+        
+        return result;
     }
     
     toggleAutoMode() {

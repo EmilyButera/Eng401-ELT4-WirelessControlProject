@@ -1,0 +1,10 @@
+# Wireless Control Project - Python Dependencies
+
+# Core serial communication
+pyserial>=3.5
+
+# Optional: For auto-detecting serial ports (already included with pyserial)
+# pyserial-tools
+
+# Note: No additional packages needed for HTTP server (uses built-in http.server)
+# Note: No additional packages needed for JSON (uses built-in json module)
