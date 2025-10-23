@@ -1,11 +1,15 @@
-from machine import ADC
+from machine import ADC, UART
 from picozero import Servo, DistanceSensor
 from time import sleep, ticks_us, ticks_diff
+import json
 
 
 blue_servo = Servo(16, min_pulse_width=0.00055, max_pulse_width=0.0026)
 ds = DistanceSensor(echo=2, trigger=3)
 pot_pin = ADC(26)
+
+# Initialize Bluetooth/UART communication
+bluetooth = UART(0, baudrate=9600, tx=0, rx=1)
 
 
 lastError = 0
@@ -76,7 +80,26 @@ while True:
     lastError = error
     lastTime = ticks_us()#[miscrosec]
     
+    # Print to console for debugging
     print(desired_cart_position, current_cart_position_avg, servo_command)
+    
+    # Send data via Bluetooth as JSON
+    data = {
+        "timestamp": ticks_us(),
+        "desired_position": desired_cart_position,
+        "current_position": current_cart_position_avg,
+        "servo_command": servo_command,
+        "error": error,
+        "P_output": P_output,
+        "I_output": I_output,
+        "D_output": D_output
+    }
+    
+    try:
+        json_data = json.dumps(data) + "\n"
+        bluetooth.write(json_data.encode())
+    except Exception as e:
+        print("Bluetooth error:", e)
     
     sleep(0.03)
 

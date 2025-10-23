@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wireless Control Project - Data Monitor</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎛️ Wireless Control Project</h1>
+            <p>Real-time PID Control System Monitor</p>
+        </header>
+        
+        <div class="connection-panel">
+            <button id="connectBtn" class="connect-btn">📶 Connect to Device</button>
+            <div id="connectionStatus" class="status disconnected">Disconnected</div>
+        </div>
+
+        <div class="dashboard">
+            <div class="data-cards">
+                <div class="card">
+                    <h3>🎯 Desired Position</h3>
+                    <div class="value" id="desiredPosition">--</div>
+                    <span class="unit">cm</span>
+                </div>
+                
+                <div class="card">
+                    <h3>📍 Current Position</h3>
+                    <div class="value" id="currentPosition">--</div>
+                    <span class="unit">cm</span>
+                </div>
+                
+                <div class="card">
+                    <h3>🔧 Servo Command</h3>
+                    <div class="value" id="servoCommand">--</div>
+                    <span class="unit">%</span>
+                </div>
+                
+                <div class="card">
+                    <h3>⚠️ Error</h3>
+                    <div class="value" id="error">--</div>
+                    <span class="unit">cm</span>
+                </div>
+            </div>
+
+            <div class="pid-outputs">
+                <h3>📊 PID Component Outputs</h3>
+                <div class="pid-values">
+                    <div class="pid-item">
+                        <label>P Output:</label>
+                        <span id="pOutput">--</span>
+                    </div>
+                    <div class="pid-item">
+                        <label>I Output:</label>
+                        <span id="iOutput">--</span>
+                    </div>
+                    <div class="pid-item">
+                        <label>D Output:</label>
+                        <span id="dOutput">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h3>📈 Real-time Position Tracking</h3>
+                <canvas id="positionChart"></canvas>
+            </div>
+            
+            <div class="data-log">
+                <h3>📄 Data Log</h3>
+                <div id="dataLog" class="log-content"></div>
+                <button id="clearLog" class="clear-btn">Clear Log</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="index.js"></script>
+</body>
+</html>
