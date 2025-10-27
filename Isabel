@@ -56,7 +56,12 @@ while True:
         buf.append(current_cart_position)
         if len(buf) > 3:
             buf.pop(0)
-    current_cart_position_avg = sum(buf) / len(buf)
+    
+    # Ensure we have valid data before calculating average
+    if len(buf) > 0:
+        current_cart_position_avg = sum(buf) / len(buf)
+    else:
+        current_cart_position_avg = 15  # Default fallback position
         
         
     error = desired_cart_position - current_cart_position_avg #[cm]
@@ -65,7 +70,12 @@ while True:
     P_output = Kp * error
     errorSum = errorSum +(error*timeChange)
     I_output = Ki * errorSum
-    D_output = Kd * (error - lastError) / timeChange
+    
+    # Prevent division by zero in derivative calculation
+    if timeChange > 0:
+        D_output = Kd * (error - lastError) / timeChange
+    else:
+        D_output = 0
     
     
     servo_correction = P_output + I_output + D_output
