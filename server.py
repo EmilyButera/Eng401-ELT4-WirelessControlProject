@@ -45,7 +45,7 @@ def start_server():
     print("   • Web Bluetooth requires Chrome or Edge browser")
     print("   • Make sure your Bluetooth device is discoverable")
     print("   • Keep this terminal window open while using the app")
-    print("=" * 6
+    print("=" * 60)
     
     print("🛑 To stop the server: Press Ctrl+C")
     print("=" * 60)
