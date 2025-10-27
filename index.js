@@ -166,45 +166,48 @@ class BluetoothDataMonitor {
     }
     
     async disconnectLocal() {
+        // Stop polling if active
         if (this.pollingInterval) {
             clearInterval(this.pollingInterval);
-        }
-        if (this.mockInterval) {
-            clearInterval(this.mockInterval);
+            this.pollingInterval = null;
         }
         
         this.isConnected = false;
         this.updateConnectionStatus('disconnected', 'Disconnected');
-        this.connectLocalBtn.textContent = '� Connect to Monitor Data';
+        this.connectLocalBtn.textContent = '🌐 Connect to Computer A';
         this.connectLocalBtn.disabled = false;
-        this.addLogEntry('Disconnected from data source');
+        this.addLogEntry('Disconnected from Computer A');
     }
     
-    // Computer-to-Computer Connection via HTTP API
+    // Computer-to-Computer Connection via Network
     async connectToLocalComputer() {
         try {
-            this.updateConnectionStatus('connecting', 'Connecting to Local Computer...');
+            this.updateConnectionStatus('connecting', 'Connecting to Computer A via Network...');
             this.connectLocalBtn.disabled = true;
             
-            // Connect to the Python simulator via WebSocket simulation (using fetch for polling)
-            this.startPollingConnection();
+            // Start polling connection to Computer A
+            this.startNetworkPolling();
             
         } catch (error) {
-            console.error('Local connection failed:', error);
-            this.updateConnectionStatus('disconnected', 'Local Connection Failed');
+            console.error('Network connection failed:', error);
+            this.updateConnectionStatus('disconnected', 'Network Connection Failed');
             this.connectLocalBtn.disabled = false;
-            this.addLogEntry(`Local connection failed: ${error.message}`);
+            this.addLogEntry(`Network connection failed: ${error.message}`);
         }
     }
     
-    startPollingConnection() {
+    startNetworkPolling() {
+        // Computer A IP address - UPDATE THIS with your Computer A's actual IP
+        const COMPUTER_A_IP = '192.168.1.100'; // CHANGE THIS TO COMPUTER A'S IP ADDRESS
+        const API_BASE = `http://${COMPUTER_A_IP}:9999`;
+        
         // Connect to real hardware data from Computer A
         const pollInterval = setInterval(async () => {
             try {
                 // Check connection status first
-                const statusResponse = await fetch('http://localhost:9999/status', { 
+                const statusResponse = await fetch(`${API_BASE}/status`, { 
                     method: 'GET',
-                    timeout: 1000 
+                    signal: AbortSignal.timeout(1000)
                 });
                 
                 if (statusResponse.ok) {
@@ -212,9 +215,9 @@ class BluetoothDataMonitor {
                     
                     if (status.pico_connected) {
                         // Get real data from Pico
-                        const dataResponse = await fetch('http://localhost:9999/data', { 
+                        const dataResponse = await fetch(`${API_BASE}/data`, { 
                             method: 'GET',
-                            timeout: 1000 
+                            signal: AbortSignal.timeout(1000)
                         });
                         
                         if (dataResponse.ok) {
@@ -223,10 +226,10 @@ class BluetoothDataMonitor {
                             
                             if (!this.isConnected) {
                                 this.isConnected = true;
-                                this.updateConnectionStatus('connected', 'Monitoring Pico Hardware');
+                                this.updateConnectionStatus('connected', 'Monitoring Pico Hardware via Network');
                                 this.connectLocalBtn.textContent = '🔌 Disconnect';
                                 this.connectLocalBtn.disabled = false;
-                                this.addLogEntry('Connected to Pico hardware - monitoring mode');
+                                this.addLogEntry('✅ Connected to Pico hardware via Computer A - monitoring mode');
                             }
                         }
                     } else {
@@ -241,10 +244,16 @@ class BluetoothDataMonitor {
                 }
                 
             } catch (error) {
-                // Connection failed - offer demo mode
+                // Connection failed
                 if (!this.isConnected) {
-                    console.log('Hardware bridge not available, starting demo mode');
-                    this.startMockDataStream();
+                    console.log('Computer A bridge not available');
+                    this.updateConnectionStatus('disconnected', 'Computer A Not Found');
+                    this.connectLocalBtn.disabled = false;
+                    this.addLogEntry('❌ Cannot connect to Computer A. Please check:');
+                    this.addLogEntry(`   1. Computer A is running hardware_bridge.py`);
+                    this.addLogEntry(`   2. Update COMPUTER_A_IP in index.js to Computer A's IP`);
+                    this.addLogEntry(`   3. Both computers are on the same network`);
+                    this.addLogEntry(`   4. Pico is connected to Computer A via USB`);
                     clearInterval(pollInterval);
                 } else if (this.isConnected) {
                     this.addLogEntry(`❌ Connection lost: ${error.message}`);
@@ -258,48 +267,21 @@ class BluetoothDataMonitor {
         // Set timeout for initial connection attempt
         setTimeout(() => {
             if (!this.isConnected) {
-                console.log('No hardware detected, switching to demo mode');
-                this.startMockDataStream();
+                console.error('Network connection timeout');
+                this.updateConnectionStatus('disconnected', 'Computer A Required');
+                this.connectLocalBtn.disabled = false;
+                this.addLogEntry('❌ Unable to connect to Computer A. Please verify:');
+                this.addLogEntry('   1. Computer A IP address is correct in index.js');
+                this.addLogEntry('   2. Computer A is running hardware_bridge.py');
+                this.addLogEntry('   3. Pico is connected to Computer A via USB');
+                this.addLogEntry('   4. Isabel script is running on the Pico');
+                this.addLogEntry('⚠️ This system requires real hardware - no simulation mode');
                 clearInterval(pollInterval);
             }
-        }, 3000); // Give more time for hardware connection
+        }, 5000); // Give time for hardware connection
     }
     
-    startMockDataStream() {
-        // Generate realistic mock data for demonstration
-        let time = 0;
-        
-        this.isConnected = true;
-        this.updateConnectionStatus('connected', 'Demo Mode - Simulated Data');
-        this.connectLocalBtn.textContent = '🔌 Disconnect';
-        this.connectLocalBtn.disabled = false;
-        this.addLogEntry('Demo mode - showing simulated PID data for testing');
-        
-        this.mockInterval = setInterval(() => {
-            time += 0.03;
-            
-            // Generate realistic PID control data
-            const desired = 15 + 8 * Math.sin(time * 0.1);
-            const noise = (Math.random() - 0.5) * 0.5;
-            const current = desired + noise + 2 * Math.sin(time * 0.05);
-            const error = desired - current;
-            
-            const mockData = {
-                timestamp: Date.now() * 1000,
-                desired_position: desired,
-                current_position: current,
-                servo_command: 0.54 + error * 0.01,
-                error: error,
-                P_output: 0.06 * error,
-                I_output: Math.sin(time * 0.02) * 0.1,
-                D_output: Math.cos(time * 0.03) * 0.05
-            };
-            
-            this.updateDataDisplay(mockData);
-            this.updateChart(mockData);
-            
-        }, 30); // 30ms updates
-    }
+
     
     handleLocalData(data) {
         // Handle data from Pico hardware
@@ -311,148 +293,28 @@ class BluetoothDataMonitor {
 
 }
 
-// Alternative connection method for devices that use Serial Bluetooth
-class SerialBluetoothMonitor {
-    constructor() {
-        this.port = null;
-        this.reader = null;
-        this.isConnected = false;
-        
-        // Check if Web Serial API is supported
-        if ('serial' in navigator) {
-            this.setupSerialConnection();
-        }
-    }
-    
-    setupSerialConnection() {
-        // Add alternative connection button for Serial API
-        const connectPanel = document.querySelector('.connection-panel');
-        const serialBtn = document.createElement('button');
-        serialBtn.textContent = '🔗 Connect via Serial';
-        serialBtn.className = 'connect-btn';
-        serialBtn.style.marginLeft = '10px';
-        
-        serialBtn.addEventListener('click', async () => {
-            if (!this.isConnected) {
-                await this.connectSerial();
-            } else {
-                await this.disconnectSerial();
-            }
-        });
-        
-        connectPanel.appendChild(serialBtn);
-        this.serialBtn = serialBtn;
-    }
-    
-    async connectSerial() {
-        try {
-            // Request serial port
-            this.port = await navigator.serial.requestPort();
-            
-            // Open the port with the same baud rate as the device
-            await this.port.open({ baudRate: 9600 });
-            
-            this.isConnected = true;
-            this.serialBtn.textContent = '🔌 Disconnect Serial';
-            
-            // Start reading data
-            this.startReading();
-            
-        } catch (error) {
-            console.error('Serial connection failed:', error);
-            alert(`Serial connection failed: ${error.message}`);
-        }
-    }
-    
-    async startReading() {
-        const textDecoder = new TextDecoderStream();
-        const readableStreamClosed = this.port.readable.pipeTo(textDecoder.writable);
-        this.reader = textDecoder.readable.getReader();
-        
-        try {
-            while (true) {
-                const { value, done } = await this.reader.read();
-                if (done) break;
-                
-                // Process received data
-                const lines = value.split('\n');
-                for (const line of lines) {
-                    if (line.trim()) {
-                        this.processSerialData(line.trim());
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Reading error:', error);
-        } finally {
-            this.reader.releaseLock();
-        }
-    }
-    
-    processSerialData(data) {
-        try {
-            // Try to parse as JSON first
-            const parsedData = JSON.parse(data);
-            monitor.handleData(new TextEncoder().encode(data));
-        } catch (error) {
-            // If not JSON, try to parse as comma-separated values
-            const values = data.split(',').map(v => parseFloat(v.trim()));
-            if (values.length >= 3) {
-                const mockData = {
-                    desired_position: values[0],
-                    current_position: values[1],
-                    servo_command: values[2],
-                    error: values[0] - values[1],
-                    P_output: 0,
-                    I_output: 0,
-                    D_output: 0
-                };
-                monitor.updateDataDisplay(mockData);
-                monitor.updateChart(mockData);
-            }
-        }
-    }
-    
-    async disconnectSerial() {
-        if (this.reader) {
-            await this.reader.cancel();
-        }
-        if (this.port) {
-            await this.port.close();
-        }
-        this.isConnected = false;
-        this.serialBtn.textContent = '🔗 Connect via Serial';
-    }
-}
 
-// Initialize the application
+
+// Initialize the hardware monitoring application
 let monitor;
-let serialMonitor;
 
 document.addEventListener('DOMContentLoaded', () => {
     monitor = new BluetoothDataMonitor();
     
-    // Initialize serial monitor if supported
-    if ('serial' in navigator) {
-        serialMonitor = new SerialBluetoothMonitor();
-    }
-    
-    // Add browser compatibility warning
-    if (!navigator.bluetooth && !navigator.serial) {
-        const warning = document.createElement('div');
-        warning.style.cssText = `
-            background: #ff9800;
-            color: white;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            text-align: center;
-            font-weight: bold;
-        `;
-        warning.innerHTML = `
-            ⚠️ This browser doesn't support Web Bluetooth or Web Serial APIs.<br>
-            Please use Chrome or Edge for the best experience.
-        `;
-        document.querySelector('.container').insertBefore(warning, document.querySelector('.connection-panel'));
-    }
+    // Add hardware requirement notice
+    const notice = document.createElement('div');
+    notice.style.cssText = `
+        background: #2196F3;
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        text-align: center;
+        font-weight: bold;
+    `;
+    notice.innerHTML = `
+        🔧 Hardware Required: This interface displays real data from your Raspberry Pi Pico.<br>
+        No simulation mode available - connect your physical sensors and servo.
+    `;
+    document.querySelector('.container').insertBefore(notice, document.querySelector('.connection-panel'));
 });
