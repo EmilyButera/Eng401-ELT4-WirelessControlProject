@@ -13,7 +13,6 @@ class BluetoothDataMonitor {
     }
     
     initializeElements() {
-        this.connectBtn = document.getElementById('connectBtn');
         this.connectLocalBtn = document.getElementById('connectLocalBtn');
         this.connectionStatus = document.getElementById('connectionStatus');
         this.desiredPosition = document.getElementById('desiredPosition');
@@ -25,21 +24,6 @@ class BluetoothDataMonitor {
         this.dOutput = document.getElementById('dOutput');
         this.dataLog = document.getElementById('dataLog');
         this.clearLogBtn = document.getElementById('clearLog');
-        
-        // Setpoint control elements
-        this.setpointSlider = document.getElementById('setpointSlider');
-        this.setpointInput = document.getElementById('setpointInput');
-        this.currentSetpoint = document.getElementById('currentSetpoint');
-        this.sendSetpointBtn = document.getElementById('sendSetpoint');
-        this.autoModeBtn = document.getElementById('autoMode');
-        this.emergencyStopBtn = document.getElementById('emergencyStop');
-        this.presetBtns = document.querySelectorAll('.preset-btn');
-        this.controlPanel = document.querySelector('.control-panel');
-        
-        // Control state
-        this.autoMode = true;
-        this.emergencyStop = false;
-        this.currentSetpointValue = 15.0;
     }
     
     initializeChart() {
@@ -99,145 +83,13 @@ class BluetoothDataMonitor {
     }
     
     bindEvents() {
-        this.connectBtn.addEventListener('click', () => this.toggleConnection());
         this.connectLocalBtn.addEventListener('click', () => this.toggleLocalConnection());
         this.clearLogBtn.addEventListener('click', () => this.clearLog());
-        
-        // Setpoint control events
-        this.setpointSlider.addEventListener('input', (e) => this.updateSetpoint(parseFloat(e.target.value)));
-        this.setpointInput.addEventListener('input', (e) => this.updateSetpoint(parseFloat(e.target.value)));
-        this.sendSetpointBtn.addEventListener('click', () => this.sendSetpointCommand());
-        this.autoModeBtn.addEventListener('click', () => this.toggleAutoMode());
-        this.emergencyStopBtn.addEventListener('click', () => this.triggerEmergencyStop());
-        
-        // Preset button events
-        this.presetBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const value = parseFloat(e.target.dataset.value);
-                this.updateSetpoint(value);
-                this.sendSetpointCommand();
-                this.highlightPreset(value);
-            });
-        });
-        
-        // Initialize control panel state
-        this.updateControlPanelState();
     }
     
-    async toggleConnection() {
-        if (this.isConnected) {
-            await this.disconnect();
-        } else {
-            await this.connect();
-        }
-    }
+
     
-    async connect() {
-        try {
-            this.updateConnectionStatus('connecting', 'Connecting...');
-            this.connectBtn.disabled = true;
-            
-            // Check if Web Bluetooth is supported
-            if (!navigator.bluetooth) {
-                throw new Error('Web Bluetooth is not supported in this browser. Please use Chrome or Edge.');
-            }
-            
-            // Request Bluetooth device
-            this.device = await navigator.bluetooth.requestDevice({
-                filters: [
-                    { services: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e'] }, // Nordic UART Service
-                    { namePrefix: 'ESP32' },
-                    { namePrefix: 'Arduino' },
-                    { namePrefix: 'Pico' }
-                ],
-                optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
-            });
-            
-            // Connect to GATT server
-            const server = await this.device.gatt.connect();
-            
-            // Get the service
-            const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
-            
-            // Get the characteristic for receiving data
-            this.characteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
-            
-            // Start notifications
-            await this.characteristic.startNotifications();
-            this.characteristic.addEventListener('characteristicvaluechanged', (event) => {
-                this.handleData(event.target.value);
-            });
-            
-            // Handle disconnection
-            this.device.addEventListener('gattserverdisconnected', () => {
-                this.handleDisconnection();
-            });
-            
-            this.isConnected = true;
-            this.updateConnectionStatus('connected', 'Connected');
-            this.connectBtn.textContent = '🔌 Disconnect';
-            this.connectBtn.disabled = false;
-            
-            this.addLogEntry('Connected to device successfully');
-            
-        } catch (error) {
-            console.error('Connection failed:', error);
-            this.updateConnectionStatus('disconnected', 'Connection Failed');
-            this.connectBtn.disabled = false;
-            this.addLogEntry(`Connection failed: ${error.message}`);
-            
-            // Show user-friendly error messages
-            if (error.message.includes('User cancelled')) {
-                alert('Connection cancelled by user');
-            } else if (error.message.includes('Web Bluetooth')) {
-                alert('This browser doesn\'t support Web Bluetooth. Please use Chrome or Edge.');
-            } else {
-                alert(`Failed to connect: ${error.message}`);
-            }
-        }
-    }
-    
-    async disconnect() {
-        try {
-            if (this.device && this.device.gatt.connected) {
-                await this.device.gatt.disconnect();
-            }
-            this.handleDisconnection();
-        } catch (error) {
-            console.error('Disconnection error:', error);
-            this.handleDisconnection();
-        }
-    }
-    
-    handleDisconnection() {
-        this.isConnected = false;
-        this.device = null;
-        this.characteristic = null;
-        this.updateConnectionStatus('disconnected', 'Disconnected');
-        this.connectBtn.textContent = '📶 Connect to Device';
-        this.connectBtn.disabled = false;
-        this.addLogEntry('Device disconnected');
-    }
-    
-    handleData(value) {
-        try {
-            // Convert ArrayBuffer to string
-            const decoder = new TextDecoder();
-            const dataString = decoder.decode(value);
-            
-            // Parse JSON data
-            const data = JSON.parse(dataString);
-            
-            // Update UI with new data
-            this.updateDataDisplay(data);
-            this.updateChart(data);
-            this.addLogEntry(`Data: D:${data.desired_position} C:${data.current_position} S:${data.servo_command}`);
-            
-        } catch (error) {
-            console.error('Data parsing error:', error);
-            this.addLogEntry(`Data error: ${error.message}`);
-        }
-    }
+
     
     updateDataDisplay(data) {
         // Update main data cards with animation
@@ -323,10 +175,9 @@ class BluetoothDataMonitor {
         
         this.isConnected = false;
         this.updateConnectionStatus('disconnected', 'Disconnected');
-        this.connectLocalBtn.textContent = '🖥️ Connect to Local Computer';
+        this.connectLocalBtn.textContent = '� Connect to Monitor Data';
         this.connectLocalBtn.disabled = false;
-        this.updateControlPanelState();
-        this.addLogEntry('Disconnected from local computer');
+        this.addLogEntry('Disconnected from data source');
     }
     
     // Computer-to-Computer Connection via HTTP API
@@ -372,11 +223,10 @@ class BluetoothDataMonitor {
                             
                             if (!this.isConnected) {
                                 this.isConnected = true;
-                                this.updateConnectionStatus('connected', 'Connected to Pico Hardware');
+                                this.updateConnectionStatus('connected', 'Monitoring Pico Hardware');
                                 this.connectLocalBtn.textContent = '🔌 Disconnect';
                                 this.connectLocalBtn.disabled = false;
-                                this.updateControlPanelState();
-                                this.addLogEntry('Connected to Pico hardware successfully');
+                                this.addLogEntry('Connected to Pico hardware - monitoring mode');
                             }
                         }
                     } else {
@@ -420,11 +270,10 @@ class BluetoothDataMonitor {
         let time = 0;
         
         this.isConnected = true;
-        this.updateConnectionStatus('connected', 'Connected (Demo Mode)');
+        this.updateConnectionStatus('connected', 'Demo Mode - Simulated Data');
         this.connectLocalBtn.textContent = '🔌 Disconnect';
         this.connectLocalBtn.disabled = false;
-        this.updateControlPanelState();
-        this.addLogEntry('Connected in demo mode - showing simulated data');
+        this.addLogEntry('Demo mode - showing simulated PID data for testing');
         
         this.mockInterval = setInterval(() => {
             time += 0.03;
@@ -453,171 +302,13 @@ class BluetoothDataMonitor {
     }
     
     handleLocalData(data) {
-        // Handle data from local Python computer
+        // Handle data from Pico hardware
         this.updateDataDisplay(data);
         this.updateChart(data);
-        this.addLogEntry(`Local Data: D:${data.desired_position} C:${data.current_position} S:${data.servo_command}`);
+        this.addLogEntry(`Hardware Data: D:${data.desired_position} C:${data.current_position} S:${data.servo_command}`);
     }
     
-    // Setpoint Control Methods
-    updateSetpoint(value) {
-        if (value < 2) value = 2;
-        if (value > 33) value = 33;
-        
-        this.currentSetpointValue = value;
-        this.setpointSlider.value = value;
-        this.setpointInput.value = value;
-        this.currentSetpoint.textContent = value.toFixed(1);
-        
-        this.highlightPreset(value);
-    }
-    
-    highlightPreset(value) {
-        this.presetBtns.forEach(btn => {
-            if (parseFloat(btn.dataset.value) === value) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
-    }
-    
-    async sendSetpointCommand() {
-        if (!this.isConnected) {
-            alert('Please connect to a device first!');
-            return;
-        }
-        
-        if (this.emergencyStop) {
-            alert('System is in emergency stop mode. Reset first.');
-            return;
-        }
-        
-        const command = {
-            type: 'setpoint',
-            value: this.currentSetpointValue,
-            timestamp: Date.now(),
-            auto_mode: this.autoMode
-        };
-        
-        try {
-            // Send command to Python script
-            await this.sendCommand(command);
-            this.addLogEntry(`📤 Setpoint sent: ${this.currentSetpointValue.toFixed(1)} cm`);
-            
-            // Visual feedback
-            this.sendSetpointBtn.textContent = '✅ Sent!';
-            this.sendSetpointBtn.style.background = 'linear-gradient(45deg, #4CAF50, #45a049)';
-            
-            setTimeout(() => {
-                this.sendSetpointBtn.textContent = '📤 Send Setpoint';
-                this.sendSetpointBtn.style.background = '';
-            }, 1500);
-            
-        } catch (error) {
-            console.error('Failed to send setpoint:', error);
-            this.addLogEntry(`❌ Failed to send setpoint: ${error.message}`);
-            
-            this.sendSetpointBtn.textContent = '❌ Failed';
-            this.sendSetpointBtn.style.background = '#f44336';
-            
-            setTimeout(() => {
-                this.sendSetpointBtn.textContent = '📤 Send Setpoint';
-                this.sendSetpointBtn.style.background = '';
-            }, 1500);
-        }
-    }
-    
-    async sendCommand(command) {
-        if (this.mockInterval) {
-            // For demo mode, just log the command
-            console.log('Demo mode - Command would be sent:', command);
-            return;
-        }
-        
-        // Send command to Computer A which forwards it to the Pico
-        const response = await fetch('http://localhost:9999/command', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(command)
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        
-        // Log successful command transmission
-        this.addLogEntry(`📡 Command sent to Pico via Computer A`);
-        
-        return result;
-    }
-    
-    toggleAutoMode() {
-        this.autoMode = !this.autoMode;
-        this.updateControlPanelState();
-        
-        const command = {
-            type: 'auto_mode',
-            value: this.autoMode,
-            timestamp: Date.now()
-        };
-        
-        this.sendCommand(command).catch(console.error);
-        this.addLogEntry(`🔄 Auto mode: ${this.autoMode ? 'ON' : 'OFF'}`);
-    }
-    
-    triggerEmergencyStop() {
-        this.emergencyStop = !this.emergencyStop;
-        this.updateControlPanelState();
-        
-        const command = {
-            type: 'emergency_stop',
-            value: this.emergencyStop,
-            timestamp: Date.now()
-        };
-        
-        this.sendCommand(command).catch(console.error);
-        this.addLogEntry(`🛑 Emergency stop: ${this.emergencyStop ? 'ACTIVE' : 'RESET'}`);
-        
-        if (this.emergencyStop) {
-            this.addLogEntry('⚠️ System stopped for safety - all movement disabled');
-        } else {
-            this.addLogEntry('✅ Emergency stop reset - system operational');
-        }
-    }
-    
-    updateControlPanelState() {
-        // Update auto mode button
-        if (this.autoMode) {
-            this.autoModeBtn.textContent = '🔄 Auto Mode ON';
-            this.autoModeBtn.classList.add('auto-active');
-        } else {
-            this.autoModeBtn.textContent = '⏸️ Manual Mode';
-            this.autoModeBtn.classList.remove('auto-active');
-        }
-        
-        // Update emergency stop button
-        if (this.emergencyStop) {
-            this.emergencyStopBtn.textContent = '🔄 Reset System';
-            this.emergencyStopBtn.style.background = 'linear-gradient(45deg, #ff9800, #f57c00)';
-            this.controlPanel.classList.add('disabled');
-        } else {
-            this.emergencyStopBtn.textContent = '🛑 Emergency Stop';
-            this.emergencyStopBtn.style.background = '';
-            this.controlPanel.classList.remove('disabled');
-        }
-        
-        // Enable/disable controls based on connection
-        const isDisabled = !this.isConnected || this.emergencyStop;
-        this.sendSetpointBtn.disabled = isDisabled;
-        this.setpointSlider.disabled = isDisabled;
-        this.setpointInput.disabled = isDisabled;
-        this.presetBtns.forEach(btn => btn.disabled = isDisabled);
-    }
+
 }
 
 // Alternative connection method for devices that use Serial Bluetooth

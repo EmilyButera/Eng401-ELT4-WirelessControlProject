@@ -15,43 +15,14 @@
         </header>
         
         <div class="connection-panel">
-            <button id="connectBtn" class="connect-btn">📶 Connect to Device</button>
-            <button id="connectLocalBtn" class="connect-btn local-btn">🖥️ Connect to Local Computer</button>
+            <button id="connectLocalBtn" class="connect-btn">� Connect to Monitor Data</button>
             <div id="connectionStatus" class="status disconnected">Disconnected</div>
         </div>
 
-        <div class="control-panel">
-            <h3>🎛️ Setpoint Control</h3>
-            <div class="setpoint-controls">
-                <div class="control-group">
-                    <label for="setpointSlider">Desired Position (cm):</label>
-                    <div class="slider-container">
-                        <input type="range" id="setpointSlider" min="2" max="33" value="15" step="0.1">
-                        <input type="number" id="setpointInput" min="2" max="33" value="15" step="0.1">
-                    </div>
-                    <div class="setpoint-value">
-                        <span id="currentSetpoint">15.0</span> cm
-                    </div>
-                </div>
-                
-                <div class="control-buttons">
-                    <button id="sendSetpoint" class="control-btn">📤 Send Setpoint</button>
-                    <button id="autoMode" class="control-btn auto-active">🔄 Auto Mode</button>
-                    <button id="emergencyStop" class="control-btn emergency">🛑 Emergency Stop</button>
-                </div>
-                
-                <div class="preset-buttons">
-                    <h4>Quick Presets:</h4>
-                    <div class="preset-grid">
-                        <button class="preset-btn" data-value="5">5 cm</button>
-                        <button class="preset-btn" data-value="10">10 cm</button>
-                        <button class="preset-btn" data-value="15">15 cm</button>
-                        <button class="preset-btn" data-value="20">20 cm</button>
-                        <button class="preset-btn" data-value="25">25 cm</button>
-                        <button class="preset-btn" data-value="30">30 cm</button>
-                    </div>
-                </div>
-            </div>
+        <div class="info-panel">
+            <h3>ℹ️ System Information</h3>
+            <p>This interface displays real-time data from your Pico PID control system.</p>
+            <p><strong>Control:</strong> Use the physical potentiometer on your Pico to set the desired position.</p>
         </div>
 
         <div class="dashboard">
@@ -82,18 +53,18 @@
             </div>
 
             <div class="pid-outputs">
-                <h3>📊 PID Component Outputs</h3>
+                <h3>📊 PID Controller Analysis</h3>
                 <div class="pid-values">
                     <div class="pid-item">
-                        <label>P Output:</label>
+                        <label>Proportional (P):</label>
                         <span id="pOutput">--</span>
                     </div>
                     <div class="pid-item">
-                        <label>I Output:</label>
+                        <label>Integral (I):</label>
                         <span id="iOutput">--</span>
                     </div>
                     <div class="pid-item">
-                        <label>D Output:</label>
+                        <label>Derivative (D):</label>
                         <span id="dOutput">--</span>
                     </div>
                 </div>

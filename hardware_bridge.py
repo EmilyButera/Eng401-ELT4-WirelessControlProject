@@ -20,7 +20,6 @@ class PicoDataBridge:
         self.baudrate = baudrate
         self.serial_connection = None
         self.latest_data = None
-        self.command_queue = []
         self.running = False
         
         # Network server settings
@@ -90,19 +89,7 @@ class PicoDataBridge:
             print(f"❌ Connection error: {e}")
             return False
     
-    def send_command_to_pico(self, command):
-        """Send a command to the Pico"""
-        if not self.pico_connected or not self.serial_connection:
-            return False
-            
-        try:
-            command_json = json.dumps(command) + "\n"
-            self.serial_connection.write(command_json.encode())
-            print(f"📤 Sent to Pico: {command}")
-            return True
-        except Exception as e:
-            print(f"❌ Error sending command: {e}")
-            return False
+
     
     def read_pico_data(self):
         """Continuously read data from the Pico"""
@@ -114,7 +101,7 @@ class PicoDataBridge:
                     line = self.serial_connection.readline().decode().strip()
                     
                     if line:
-                        # Parse different types of messages from Pico
+                        # Parse data messages from Pico
                         if line.startswith("DATA:"):
                             # Sensor data
                             try:
@@ -129,19 +116,9 @@ class PicoDataBridge:
                                 
                             except json.JSONDecodeError:
                                 print(f"❓ Invalid JSON from Pico: {line}")
-                                
-                        elif line.startswith("CMD_ACK:"):
-                            # Command acknowledgment
-                            print(f"✅ Pico acknowledged: {line}")
-                            
                         else:
-                            # Regular debug output from Pico
+                            # Regular debug output from Pico (original print statements)
                             print(f"🎛️  Pico: {line}")
-                
-                # Process any pending commands to send to Pico
-                while self.command_queue:
-                    command = self.command_queue.pop(0)
-                    self.send_command_to_pico(command)
                 
                 time.sleep(0.01)  # Small delay to prevent overwhelming
                 
@@ -150,9 +127,7 @@ class PicoDataBridge:
                 self.pico_connected = False
                 break
     
-    def add_command(self, command):
-        """Add a command to send to the Pico"""
-        self.command_queue.append(command)
+
     
     def get_latest_data(self):
         """Get the latest data from Pico"""
@@ -195,33 +170,14 @@ class PicoDataBridge:
                     self.send_error(404, "Not found")
                     
             def do_POST(self):
-                """Handle POST requests for commands"""
-                if self.path == '/command':
-                    try:
-                        content_length = int(self.headers['Content-Length'])
-                        post_data = self.rfile.read(content_length)
-                        command = json.loads(post_data.decode())
-                        
-                        # Add command to queue for Pico
-                        self.bridge.add_command(command)
-                        
-                        self.send_response(200)
-                        self.send_header('Content-Type', 'application/json')
-                        self.send_header('Access-Control-Allow-Origin', '*')
-                        self.end_headers()
-                        response = {"status": "success", "message": "Command queued for Pico"}
-                        self.wfile.write(json.dumps(response).encode())
-                        
-                    except Exception as e:
-                        self.send_error(400, f"Bad request: {e}")
-                else:
-                    self.send_error(404, "Not found")
+                """Handle POST requests - not supported in monitoring mode"""
+                self.send_error(405, "Method not allowed - this is a monitoring-only interface")
                     
             def do_OPTIONS(self):
                 """Handle CORS preflight requests"""
                 self.send_response(200)
                 self.send_header('Access-Control-Allow-Origin', '*')
-                self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
                 self.send_header('Access-Control-Allow-Headers', 'Content-Type')
                 self.end_headers()
                 
@@ -234,8 +190,9 @@ class PicoDataBridge:
         
         try:
             with socketserver.TCPServer(("", self.http_port), handler) as httpd:
-                print(f"🌐 HTTP server started on http://localhost:{self.http_port}")
-                print("📡 Computer B can now connect to get real Pico data")
+                print(f"🌐 Monitoring server started on http://localhost:{self.http_port}")
+                print("📡 Computer B can now connect to view real Pico data")
+                print("⚠️  Read-only mode - no control commands accepted")
                 httpd.serve_forever()
         except Exception as e:
             print(f"❌ HTTP server error: {e}")
@@ -258,12 +215,13 @@ class PicoDataBridge:
         data_thread.start()
         
         # Start HTTP server (blocking)
-        print("🚀 Bridge is running...")
+        print("🚀 Monitoring bridge is running...")
         print("💡 Instructions:")
-        print("   1. Make sure your Pico is running the modified Isabel script")
-        print("   2. On Computer B, run: python server.py")
-        print("   3. Connect to the web interface")
-        print("   4. Press Ctrl+C to stop")
+        print("   1. Make sure your Pico is running the Isabel script")
+        print("   2. Control your system using the physical potentiometer on the Pico")
+        print("   3. On Computer B, run: python server.py")
+        print("   4. View real-time data in the web interface")
+        print("   5. Press Ctrl+C to stop")
         print("=" * 60)
         
         try:
