@@ -14,7 +14,7 @@ import http.server
 import socketserver
 
 class PicoDataBridge:
-    def __init__(self, port='COM3', baudrate=115200):
+    def __init__(self, port='COM12', baudrate=115200):
         self.serial_port = port
         self.baudrate = baudrate
         self.serial_connection = None
