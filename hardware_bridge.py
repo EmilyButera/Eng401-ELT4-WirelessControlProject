@@ -96,7 +96,7 @@ class PicoDataBridge:
             while test_attempts < 5:
                 try:
                     line = self.serial_connection.readline().decode().strip()
-                    if line and '{' in line:
+                    if line and ('{' in line or line.startswith("DATA:")):
                         print("✅ Pico connection verified - receiving JSON data")
                         self.pico_connected = True
                         return True
@@ -132,8 +132,13 @@ class PicoDataBridge:
                     
                     if line:
                         try:
+                            # Handle "DATA:" prefix if present
+                            json_line = line
+                            if line.startswith("DATA:"):
+                                json_line = line[5:]  # Remove "DATA:" prefix
+                            
                             # Parse JSON data from Pico
-                            data = json.loads(line)
+                            data = json.loads(json_line)
                             
                             # Validate data structure
                             required_fields = ['timestamp', 'desired_position', 'current_position', 'servo_command']

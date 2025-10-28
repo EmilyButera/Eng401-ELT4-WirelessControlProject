@@ -197,8 +197,8 @@ class BluetoothDataMonitor {
     }
     
     startNetworkPolling() {
-        // Computer A IP address - UPDATE THIS with your Computer A's actual IP
-        const COMPUTER_A_IP = '192.168.1.100'; // CHANGE THIS TO COMPUTER A'S IP ADDRESS
+        // Computer A IP address - UPDATED with your actual IP
+        const COMPUTER_A_IP = '172.28.0.181'; // Computer A's actual IP address
         const API_BASE = `http://${COMPUTER_A_IP}:9999`;
         
         // Connect to real hardware data from Computer A
